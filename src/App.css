@@ -1,24 +1,25 @@
-.App {
-  text-align: center;
+.Participant {
+    position: relative;
+    width: 32px;
+    height: 32px;
 }
-
-.App-logo {
-  animation: App-logo-spin infinite 20s linear;
-  height: 80px;
+.Participant-image {
+    border-radius: 3px;
 }
-
-.App-header {
-  background-color: #222;
-  height: 150px;
-  padding: 20px;
-  color: white;
+.Participant--approved .Participant-image {
+    opacity: .5;
 }
-
-.App-intro {
-  font-size: large;
-}
-
-@keyframes App-logo-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.Participant--approved .Participant-badge {
+    background-color: #14892C;
+    color: white;
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 15px;
+    height: 15px;
+    font-size: 13px;
 }

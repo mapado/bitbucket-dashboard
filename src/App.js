@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import cn from 'classnames';
 import logo from './logo.svg';
 import './App.css';
 
@@ -17,6 +18,21 @@ function fetchBitbucket(endpoint) {
         Authorization: `Basic ${bbAuth}`,
       },
     }
+  );
+}
+
+function Participant({ participant }) {
+  return (
+    <div key={participant.user.uuid} className={cn('Participant', participant.approved && 'Participant--approved')}>
+      <img
+        className="Participant-image"
+        src={participant.user.links.avatar.href}
+        alt={participant.user.display_name}
+      />
+      {participant.approved &&
+        <div className="Participant-badge"><span>✔️️</span></div>
+      }
+    </div>
   );
 }
 
@@ -69,14 +85,19 @@ class App extends Component {
         console.log(out);
 
         Promise.all(out.map(pr => {
-          return fetchBitbucket(pr.links.activity.href)
-            .then(response => response.json())
-            .then(activityList => {
+          const fetchActivity = fetchBitbucket(pr.links.activity.href)
+            .then(response => response.json());
+          const fetchSelf = fetchBitbucket(pr.links.self.href)
+            .then(response => response.json());
+
+          return Promise.all([fetchActivity, fetchSelf])
+            .then(([activityList, self]) => {
               const approvalList = activityList.values.filter(activity => activity.approval);
 
               return {
-                pr,
+                pr: self,
                 approvalList,
+                activityList: activityList.values,
               };
             })
           ;
@@ -109,14 +130,7 @@ class App extends Component {
     console.log(this.state);
     return (
       <div className="App">
-        <div className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h2>Welcome to React</h2>
-        </div>
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
-
+        <h2>Last projects</h2>
         <ul>
           {this.state.repositories && this.state.repositories.values.map(project =>
             <li key={project.uuid}>{project.name}</li>
@@ -124,19 +138,36 @@ class App extends Component {
         </ul>
 
         <h2>My Pull requests</h2>
-        <ul>
-          {this.state.myPullrequests.map(({pr, approvalList}) =>
-            <li key={`${pr.source.repository.full_name}-${pr.id}`}>
-              <a href={pr.links.html.href}>
-                {pr.source.repository.name} {' - '}
-                {pr.id} {' - '}
-                {pr.title} {' - '}
-                {pr.comment_count} comments {' - '}
-                {approvalList.length} approval {' - '}
-              </a>
-            </li>
-          )}
-        </ul>
+        <table>
+          <thead>
+            <tr>
+              <td>Projet</td>
+              <td>Title</td>
+              <td>Reviewers</td>
+              <td>Status</td>
+              <td>Comments</td>
+            </tr>
+          </thead>
+          <tbody>
+            {this.state.myPullrequests.map(({pr, approvalList}) =>
+              <tr key={`${pr.source.repository.full_name}-${pr.id}`}>
+                <td>{pr.source.repository.name}</td>
+                <td>
+                  <a href={pr.links.html.href}>
+                    #{pr.id} {pr.title}
+                  </a>
+                </td>
+                <td>
+                  {pr.participants.map(participant =>
+                    <Participant key={participant.user.uuid} participant={participant} />
+                  )}
+                </td>
+                <td>-</td>
+                <td>{pr.comment_count} comments</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     );
   }
