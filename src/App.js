@@ -166,7 +166,7 @@ class App extends Component {
   }
 
   componentDidMount() {
-    this.reloadInterval = setInterval(this.reload, 1 * 60 * 1000); // 1 minute
+    this.reloadInterval = setInterval(this.reload, 30 * 60 * 1000); // 1 minute
     this.reload();
   }
 
