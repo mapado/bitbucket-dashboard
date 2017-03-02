@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import cn from 'classnames';
-import logo from './logo.svg';
 import './App.css';
 
 if (!process.env.REACT_APP_BB_AUTH) {
