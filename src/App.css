@@ -1,3 +1,14 @@
+.ParticipantList {
+    display: flex;
+    flex-direction: row;
+}
+.ParticipantList > .Participant {
+    margin-right: 5px;
+}
+.ParticipantList > .Participant:last-child {
+    margin-right: 0;
+}
+
 .Participant {
     position: relative;
     width: 32px;
@@ -22,4 +33,9 @@
     width: 15px;
     height: 15px;
     font-size: 13px;
+}
+
+.RepositoryList .Repository-Link {
+    display: block;
+    text-align: center;
 }
