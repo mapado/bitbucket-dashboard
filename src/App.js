@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
-import cn from 'classnames';
 import moment from 'moment';
 import urijs from 'urijs';
 import './App.css';
+import fetchBitbucket from './bitbucket';
+import RepositoryList from './RepositoryList';
+import PullRequest from './PullRequest';
 
 const USERNAME = urijs.parseQuery(urijs().query()).who;
 
@@ -10,115 +12,42 @@ if (!process.env.REACT_APP_BB_AUTH) {
   console.warn('REACT_APP_BB_AUTH is not set, run REACT_APP_BB_AUTH="your-token" npm start');
 }
 
-const bbAuth = process.env.REACT_APP_BB_AUTH;
-
-function fetchBitbucket(endpoint) {
-  const url = endpoint.startsWith('https://') ? endpoint : `https://api.bitbucket.org/2.0/${endpoint}`;
-  return fetch(
-    url,
-    {
-      'headers': {
-        Authorization: `Basic ${bbAuth}`,
-      },
-    }
-  );
-}
-
-function TimeFrom({ when }) {
-  return (when &&
-    <div title={moment(when).format()}>
-      {moment(when).fromNow()}
-    </div>
-  );
-}
-
-function Comment({ comment }) {
-  if (!comment) {
-    return null;
-  }
-
-  return (<div className="media">
-    <div className="media__object">
-      <Avatar user={comment.comment.user} />
-    </div>
-    <div className="media__body">
-      <TimeFrom when={comment.comment.created_on} />
-      <div>
-        {comment.comment.content.raw.substr(0, 20)}...
-      </div>
-    </div>
-  </div>);
-}
-
-function PullRequest({ pr, activityList }) {
-  const key = `${pr.source.repository.full_name}-${pr.id}`;
-
-  const lastComment = activityList.find(activity => !!activity.comment);
-  const myLastComment = activityList.find(activity => activity.comment && activity.comment.user.username === USERNAME);
-
+function PullRequestList({ pullRequestList, title }) {
+  console.log(pullRequestList);
   return (
-    <tr key={key}>
-      <td>{pr.source.repository.name}</td>
-      <td>
-        <a href={pr.links.html.href}>
-          #{pr.id} {pr.title}
-        </a>
-      </td>
-      <td className="ParticipantList">
-        {pr.participants.map(participant =>
-          <Participant key={participant.user.uuid} participant={participant} />
-        )}
-      </td>
-      <td>-</td>
-      <td>{pr.comment_count} comments</td>
-      <td>
-        <Comment comment={lastComment} />
-      </td>
-      <td>
-        <Comment comment={myLastComment} />
-      </td>
-    </tr>
-  );
-}
-
-function Avatar({ user }) {
-  return (
-    <img
-      className="Participant-image"
-      src={user.links.avatar.href}
-      alt={user.display_name}
-    />
-  );
-}
-
-function Participant({ participant }) {
-  return (
-    <div key={participant.user.uuid} className={cn('Participant', participant.approved && 'Participant--approved')}>
-      <Avatar user={participant.user} />
-      {participant.approved &&
-        <div className="Participant-badge"><span>✔️️</span></div>
-      }
-    </div>
-  );
-}
-
-function RepositoryList({ repositoryList }) {
-  if (!repositoryList) {
-    return null;
-  }
-
-  return (
-    <div className="grid-row-from-sm RepositoryList">
-      {repositoryList.values.map(repo =>
-        <div className="grid-col-6-from-sm grid-col-3-from-md">
-          <div key={repo.uuid} className="mpd-block Repository">
-            <a href={repo.links.html.href} className="mpd-block-content Repository-Link">
-              <div>{repo.name}</div>
-              <TimeFrom when={repo.updated_on} />
-            </a>
-          </div>
-        </div>
-      )}
+    <div>
+      <h2>{title}</h2>
+      <table className="table">
+        <thead>
+          <tr>
+            <td>Projet</td>
+            <td>Title</td>
+            <td>Reviewers</td>
+            <td>Status</td>
+            <td>Comments</td>
+            <td>Last Comment</td>
+            <td>My last comment</td>
+          </tr>
+        </thead>
+        <tbody>
+          {pullRequestList.map(({pr, approvalList, activityList, statuses}) =>
+            <PullRequest
+              username={USERNAME}
+              key={`${pr.source.repository.full_name}-${pr.id}`}
+              pr={pr}
+              activityList={activityList}
+              statuses={statuses}
+            />
+          )}
+          {pullRequestList.length === 0 &&
+            <tr>
+              <td colSpan="100%">
+                No opened pull request
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -144,13 +73,12 @@ class App extends Component {
         this.setState({
           repositories,
         });
-
-        return repositories;
       })
     ;
   }
 
-  fetchPullRequests(repositories) {
+  fetchPullRequests() {
+    const repositories = this.state.repositories;
     if (!repositories) {
       return;
     }
@@ -179,15 +107,18 @@ class App extends Component {
             .then(response => response.json());
           const fetchSelf = fetchBitbucket(pr.links.self.href)
             .then(response => response.json());
+          const fetchStatuses = fetchBitbucket(pr.links.statuses.href)
+            .then(response => response.json());
 
-          return Promise.all([fetchActivity, fetchSelf])
-            .then(([activityList, self]) => {
+          return Promise.all([fetchActivity, fetchSelf, fetchStatuses])
+            .then(([activityList, self, statuses]) => {
               const approvalList = activityList.values.filter(activity => activity.approval);
 
               return {
                 pr: self,
                 approvalList,
                 activityList: activityList.values,
+                statuses,
               };
             })
           ;
@@ -203,8 +134,39 @@ class App extends Component {
     ;
   }
 
+  fetchLast15DaysPullRequests() {
+    const repositories = this.state.repositories;
+    if (!repositories) {
+      return;
+    }
+
+    const promises = repositories.values.map(repo => {
+      return fetchBitbucket(`repositories/mapado/${repo.name}/pullrequests?sort=-updated_on&q=${encodeURIComponent(`author.username="${USERNAME}" AND state="MERGED" AND updated_on >= ${moment().subtract(15, 'days').format('YYYY-MM-DD')}`)}`)
+        .then(response => response.json())
+        .then(prs => prs.values)
+      ;
+    });
+
+    return Promise.all(promises)
+      .then(pullrequestByRepo => {
+
+        const out = pullrequestByRepo
+          .filter(prByRepo => prByRepo.length > 0)
+          .reduce(
+            (out, prs) =>  out.concat(prs),
+            []
+          )
+        ;
+
+        this.setState({
+          last15daysPullRequests: out.map(pr => ({ pr })),
+        });
+      })
+    ;
+  }
+
   componentDidMount() {
-    this.reloadInterval = setInterval(this.reload, 5 * 60 * 1000);
+    this.reloadInterval = setInterval(this.reload, 1 * 60 * 1000); // 1 minute
     this.reload();
   }
 
@@ -217,20 +179,41 @@ class App extends Component {
   reload() {
     this
       .fetchRepositories()
-      .then(this.fetchPullRequests)
+      .then(() => {
+        this.fetchPullRequests();
+        this.fetchLast15DaysPullRequests();
+      })
     ;
   }
 
   render() {
     if (!USERNAME) {
+      const users = [
+        'jdeniau',
+        'zwit',
+        'badaz',
+        'cmozzati',
+        'thomasdiluccio',
+        'Senromain',
+        'Fe4nn0r',
+        'dallegoet',
+        'adrien_fichet',
+      ];
+
       return (<div>
-        User not set{' '}
-        <a href="?who=jdeniau">
-          Let's try with jdeniau
-        </a>
+        Who are you ?
+        <ul>
+          {users.map(user =>
+            <li key={user}>
+              <a href={`?who=${user}`}>
+                {user}
+              </a>
+            </li>
+          )}
+        </ul>
       </div>);
     }
-    if (!bbAuth) {
+    if (!process.env.REACT_APP_BB_AUTH) {
       return (<div>
         Token not set
       </div>);
@@ -242,36 +225,19 @@ class App extends Component {
         <h2>Last updated repos</h2>
         <RepositoryList repositoryList={this.state.repositories} />
 
-        <h2>My Pull requests</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <td>Projet</td>
-              <td>Title</td>
-              <td>Reviewers</td>
-              <td>Status</td>
-              <td>Comments</td>
-              <td>Last Comment</td>
-              <td>My last comment</td>
-            </tr>
-          </thead>
-          <tbody>
-            {this.state.myPullrequests.map(({pr, approvalList, activityList}) =>
-              <PullRequest
-                key={`${pr.source.repository.full_name}-${pr.id}`}
-                pr={pr}
-                activityList={activityList}
-              />
-            )}
-            {this.state.myPullrequests.length === 0 &&
-              <tr>
-                <td colSpan="100%">
-                  No opened pull request
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        {this.state.myPullrequests &&
+          <PullRequestList
+            pullRequestList={this.state.myPullrequests}
+            title="My Pull requests"
+          />
+        }
+
+        {this.state.last15daysPullRequests &&
+          <PullRequestList
+            pullRequestList={this.state.last15daysPullRequests}
+            title="Merged in the last 15 days"
+          />
+        }
       </div>
     );
   }
