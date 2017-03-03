@@ -1,6 +1,7 @@
 import React from 'react';
 import cn from 'classnames';
 import TimeFrom from './TimeFrom';
+import './OpenedPullRequest.css';
 
 function reduceStatuses(out, status) {
   const state = status.state;
@@ -63,28 +64,44 @@ function Participant({ participant }) {
   );
 }
 
-function PullRequest({ pr, activityList, statuses, username }) {
+function TrStatus({ children, status, ...props }) {
+  return (
+    <tr {...props} className={`PullRequest-status--${status && status.toLowerCase()}`}>
+      {children}
+    </tr>
+  );
+}
+
+function OpenedPullRequest({ pr, activityList, statuses, username }) {
   const key = `${pr.source.repository.full_name}-${pr.id}`;
 
   const lastComment = activityList && activityList.find(activity => !!activity.comment);
   const myLastComment = activityList && activityList.find(activity => activity.comment && activity.comment.user.username === username);
 
   const mainStatus = statuses && statuses.values.reduce(reduceStatuses, null);
+  const mainStatusClassname = mainStatus === 'SUCCESSFUL' ?
+    'mpd-block-bg-green' :
+    mainStatus === 'FAILED' ? 'mpd-block-bg-red' :
+    mainStatus === 'INPROGRESS' ? 'mpd-block-bg-blue' :
+    null
+    ;
 
   return (
-    <tr key={key}>
+    <TrStatus key={key} status={mainStatus}>
       <td>{pr.source.repository.name}</td>
       <td>
         <a href={pr.links.html.href}>
           #{pr.id} {pr.title}
         </a>
       </td>
-      <td className="ParticipantList">
-        {pr.participants && pr.participants.map(participant =>
-          <Participant key={participant.user.uuid} participant={participant} />
-        )}
+      <td>
+        <div className="ParticipantList">
+          {pr.participants && pr.participants.map(participant =>
+            <Participant key={participant.user.uuid} participant={participant} />
+          )}
+        </div>
       </td>
-      <td>{mainStatus}</td>
+      <td className={mainStatusClassname}>{mainStatus}</td>
       <td>{pr.comment_count} comments</td>
       <td>
         <Comment comment={lastComment} />
@@ -92,8 +109,8 @@ function PullRequest({ pr, activityList, statuses, username }) {
       <td>
         <Comment comment={myLastComment} />
       </td>
-    </tr>
+    </TrStatus>
   );
 }
 
-export default PullRequest;
+export default OpenedPullRequest;

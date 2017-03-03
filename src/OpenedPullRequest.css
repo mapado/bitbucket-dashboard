@@ -1,0 +1,8 @@
+.PullRequest-status--failed td {
+    background: #bf3f34;
+    color: #cdcdcd;
+}
+
+.PullRequest-status--failed a {
+    color: #fff;
+}

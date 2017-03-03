@@ -1,55 +1,15 @@
 import React, { Component } from 'react';
-import moment from 'moment';
 import urijs from 'urijs';
 import './App.css';
 import fetchBitbucket from './bitbucket';
 import RepositoryList from './RepositoryList';
-import PullRequest from './PullRequest';
+import MergedPullRequestList from './MergedPullRequestList';
+import OpenedPullRequestList from './OpenedPullRequestList';
 
 const USERNAME = urijs.parseQuery(urijs().query()).who;
 
 if (!process.env.REACT_APP_BB_AUTH) {
   console.warn('REACT_APP_BB_AUTH is not set, run REACT_APP_BB_AUTH="your-token" npm start');
-}
-
-function PullRequestList({ pullRequestList, title }) {
-  console.log(pullRequestList);
-  return (
-    <div>
-      <h2>{title}</h2>
-      <table className="table">
-        <thead>
-          <tr>
-            <td>Projet</td>
-            <td>Title</td>
-            <td>Reviewers</td>
-            <td>Status</td>
-            <td>Comments</td>
-            <td>Last Comment</td>
-            <td>My last comment</td>
-          </tr>
-        </thead>
-        <tbody>
-          {pullRequestList.map(({pr, approvalList, activityList, statuses}) =>
-            <PullRequest
-              username={USERNAME}
-              key={`${pr.source.repository.full_name}-${pr.id}`}
-              pr={pr}
-              activityList={activityList}
-              statuses={statuses}
-            />
-          )}
-          {pullRequestList.length === 0 &&
-            <tr>
-              <td colSpan="100%">
-                No opened pull request
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 class App extends Component {
@@ -61,7 +21,6 @@ class App extends Component {
   constructor(props) {
     super(props);
 
-    this.fetchPullRequests = this.fetchPullRequests.bind(this);
     this.reload = this.reload.bind(this);
     this.reloadInterval = null;
   }
@@ -72,94 +31,6 @@ class App extends Component {
       .then(repositories => {
         this.setState({
           repositories,
-        });
-      })
-    ;
-  }
-
-  fetchPullRequests() {
-    const repositories = this.state.repositories;
-    if (!repositories) {
-      return;
-    }
-
-    const promises = repositories.values.map(repo => {
-      return fetchBitbucket(`repositories/mapado/${repo.name}/pullrequests?q=${encodeURIComponent(`author.username="${USERNAME}" AND state="OPEN"`)}`)
-        .then(response => response.json())
-        .then(prs => prs.values)
-      ;
-    });
-
-    return Promise.all(promises)
-      .then(pullrequestByRepo => {
-
-        const out = pullrequestByRepo
-          .filter(prByRepo => prByRepo.length > 0)
-          .reduce(
-            (out, prs) =>  out.concat(prs),
-            []
-          )
-        ;
-        console.log(out);
-
-        Promise.all(out.map(pr => {
-          const fetchActivity = fetchBitbucket(pr.links.activity.href)
-            .then(response => response.json());
-          const fetchSelf = fetchBitbucket(pr.links.self.href)
-            .then(response => response.json());
-          const fetchStatuses = fetchBitbucket(pr.links.statuses.href)
-            .then(response => response.json());
-
-          return Promise.all([fetchActivity, fetchSelf, fetchStatuses])
-            .then(([activityList, self, statuses]) => {
-              const approvalList = activityList.values.filter(activity => activity.approval);
-
-              return {
-                pr: self,
-                approvalList,
-                activityList: activityList.values,
-                statuses,
-              };
-            })
-          ;
-        }))
-          .then(out => {
-            this.setState({
-              myPullrequests: out,
-            });
-          })
-        ;
-
-      })
-    ;
-  }
-
-  fetchLast15DaysPullRequests() {
-    const repositories = this.state.repositories;
-    if (!repositories) {
-      return;
-    }
-
-    const promises = repositories.values.map(repo => {
-      return fetchBitbucket(`repositories/mapado/${repo.name}/pullrequests?sort=-updated_on&q=${encodeURIComponent(`author.username="${USERNAME}" AND state="MERGED" AND updated_on >= ${moment().subtract(15, 'days').format('YYYY-MM-DD')}`)}`)
-        .then(response => response.json())
-        .then(prs => prs.values)
-      ;
-    });
-
-    return Promise.all(promises)
-      .then(pullrequestByRepo => {
-
-        const out = pullrequestByRepo
-          .filter(prByRepo => prByRepo.length > 0)
-          .reduce(
-            (out, prs) =>  out.concat(prs),
-            []
-          )
-        ;
-
-        this.setState({
-          last15daysPullRequests: out.map(pr => ({ pr })),
         });
       })
     ;
@@ -177,13 +48,7 @@ class App extends Component {
   }
 
   reload() {
-    this
-      .fetchRepositories()
-      .then(() => {
-        this.fetchPullRequests();
-        this.fetchLast15DaysPullRequests();
-      })
-    ;
+    this.fetchRepositories();
   }
 
   render() {
@@ -219,25 +84,26 @@ class App extends Component {
       </div>);
     }
 
-    console.log(this.state);
+    if (!this.state.repositories) {
+      return null;
+    }
+
     return (
       <div className="App">
         <h2>Last updated repos</h2>
-        <RepositoryList repositoryList={this.state.repositories} />
+        <RepositoryList
+          repositoryList={this.state.repositories}
+        />
 
-        {this.state.myPullrequests &&
-          <PullRequestList
-            pullRequestList={this.state.myPullrequests}
-            title="My Pull requests"
-          />
-        }
+        <OpenedPullRequestList
+          repositories={this.state.repositories.values}
+          username={USERNAME}
+        />
 
-        {this.state.last15daysPullRequests &&
-          <PullRequestList
-            pullRequestList={this.state.last15daysPullRequests}
-            title="Merged in the last 15 days"
-          />
-        }
+        <MergedPullRequestList
+          repositories={this.state.repositories.values}
+          username={USERNAME}
+        />
       </div>
     );
   }
