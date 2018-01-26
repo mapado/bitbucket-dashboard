@@ -30,7 +30,7 @@ class OpenedPrList extends Component {
     }
 
     const promises = repositories.map(repo => {
-      return fetchBitbucket(`repositories/mapado/${repo.name}/pullrequests?q=${encodeURIComponent(`author.username="${this.props.username}" AND state="OPEN"`)}`)
+      return fetchBitbucket(`repositories/mapado/${repo.name.toLowerCase()}/pullrequests?q=${encodeURIComponent(`author.username="${this.props.username}" AND state="OPEN"`)}`)
         .then(response => response.json())
         .then(prs => prs.values)
       ;

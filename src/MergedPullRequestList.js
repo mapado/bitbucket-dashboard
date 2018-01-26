@@ -68,7 +68,7 @@ class MergedPrList extends Component {
     const repositories = this.props.repositories;
 
     const promises = repositories.map(repo => {
-      return fetchBitbucket(`repositories/mapado/${repo.name}/pullrequests?sort=-updated_on&q=${encodeURIComponent(`author.username="${this.props.username}" AND state="MERGED" AND updated_on >= ${moment().subtract(15, 'days').format('YYYY-MM-DD')}`)}`)
+      return fetchBitbucket(`repositories/mapado/${repo.name.toLowerCase()}/pullrequests?sort=-updated_on&q=${encodeURIComponent(`author.username="${this.props.username}" AND state="MERGED" AND updated_on >= ${moment().subtract(15, 'days').format('YYYY-MM-DD')}`)}`)
         .then(response => response.json())
         .then(prs => prs.values)
       ;
